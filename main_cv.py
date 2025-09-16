@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
-from data import WordVocab, Protein_dataset
+from data import Protein_dataset
 from model import Protein_feature_extraction,cross_attention
 from torch_geometric.loader import DataLoader
 import torch.optim as optim
