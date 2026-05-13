@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PPI Affinity Predictor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    textarea { resize: vertical; }
+  </style>
+</head>
+<body class="h-full bg-gradient-to-br from-gray-950 to-zinc-900 text-white">
+  <div class="min-h-screen flex items-center justify-center p-6">
+    <div class="max-w-4xl w-full">
+      <!-- Header -->
+      <div class="text-center mb-10">
+        <h1 class="text-5xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-3">
+          PPI Affinity Predictor
+        </h1>
+        <p class="text-zinc-400 text-lg">Protein-Protein Interaction Binding Affinity Prediction</p>
+      </div>
+
+      <div class="bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-800 p-8">
+        <form id="predictForm" class="space-y-8">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <!-- Ligand -->
+            <div>
+              <label class="flex items-center gap-2 text-sm font-medium text-zinc-300 mb-2">
+                <i class="fas fa-protein fa-fw"></i> Ligand Sequence
+              </label>
+              <textarea id="ligand" rows="8"
+                class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-5 text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                placeholder="Enter ligand amino acid sequence..."></textarea>
+            </div>
+
+            <!-- Receptor -->
+            <div>
+              <label class="flex items-center gap-2 text-sm font-medium text-zinc-300 mb-2">
+                <i class="fas fa-protein fa-fw"></i> Receptor Sequence
+              </label>
+              <textarea id="receptor" rows="8"
+                class="w-full bg-zinc-950 border border-zinc-700 rounded-2xl p-5 text-sm font-mono focus:outline-none focus:border-blue-500 transition-colors"
+                placeholder="Enter receptor amino acid sequence..."></textarea>
+            </div>
+          </div>
+
+          <div class="flex justify-center">
+            <button type="submit"
+              id="submitBtn"
+              class="px-10 py-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-2xl font-semibold text-lg flex items-center gap-3 transition-all active:scale-95">
+              <i class="fas fa-bolt"></i>
+              Predict Binding Affinity
+            </button>
+          </div>
+        </form>
+
+        <!-- Result Section -->
+        <div id="result" class="hidden mt-10 pt-8 border-t border-zinc-700">
+          <div class="text-center">
+            <h3 class="text-xl font-semibold text-zinc-300 mb-6">Prediction Result</h3>
+            
+            <div id="affinityValue" 
+              class="text-7xl font-bold mb-4 text-white tabular-nums">
+            </div>
+            
+            <div id="strength" class="inline-flex items-center gap-2 px-6 py-2 rounded-2xl text-lg font-medium mb-8">
+            </div>
+
+            <div class="bg-zinc-950 rounded-2xl p-6 text-left">
+              <p class="text-sm text-zinc-400">Interpretation:</p>
+              <ul class="text-sm space-y-1 mt-3 text-zinc-300">
+                <li id="weak" class="flex items-center gap-2"><span class="w-3 h-3 bg-red-500 rounded-full"></span>Weak binding: &lt; 6.0</li>
+                <li id="medium" class="flex items-center gap-2"><span class="w-3 h-3 bg-yellow-500 rounded-full"></span>Medium binding: 6.0 – 9.0</li>
+                <li id="strong" class="flex items-center gap-2"><span class="w-3 h-3 bg-emerald-500 rounded-full"></span>Strong binding: &gt; 9.0</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-center text-zinc-500 text-sm mt-8">
+        Powered by Deep Learning • Protein Feature Extraction + Cross Attention
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('predictForm');
+    const resultDiv = document.getElementById('result');
+    const affinityValue = document.getElementById('affinityValue');
+    const strengthDiv = document.getElementById('strength');
+    const submitBtn = document.getElementById('submitBtn');
+
+    // Thresholds (adjust based on your model's typical output range)
+    function getStrength(score) {
+      if (score > 9.0) {
+        return {
+          label: "Strong Binding",
+          color: "bg-emerald-500 text-black",
+          icon: "fas fa-arrow-up"
+        };
+      } else if (score >= 6.0) {
+        return {
+          label: "Medium Binding",
+          color: "bg-yellow-500 text-black",
+          icon: "fas fa-equals"
+        };
+      } else {
+        return {
+          label: "Weak Binding",
+          color: "bg-red-500 text-white",
+          icon: "fas fa-arrow-down"
+        };
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const ligand = document.getElementById('ligand').value.trim();
+      const receptor = document.getElementById('receptor').value.trim();
+
+      if (!ligand || !receptor) {
+        alert("Please enter both ligand and receptor sequences.");
+        return;
+      }
+
+      // Loading state
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `
+        <i class="fas fa-spinner fa-spin"></i>
+        Predicting...
+      `;
+
+      try {
+        const response = await fetch('http://localhost:8000/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ligand, receptor })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.detail || "Prediction failed");
+
+        // Show result
+        affinityValue.textContent = data.predicted_affinity.toFixed(4);
+
+        const strength = getStrength(data.predicted_affinity);
+        strengthDiv.innerHTML = `
+          <i class="${strength.icon}"></i>
+          <span>${strength.label}</span>
+        `;
+        strengthDiv.className = `inline-flex items-center gap-2 px-6 py-2 rounded-2xl text-lg font-medium mb-8 ${strength.color}`;
+
+        resultDiv.classList.remove('hidden');
+        resultDiv.scrollIntoView({ behavior: 'smooth' });
+
+      } catch (error) {
+        alert("Error: " + error.message);
+        console.error(error);
+      } finally {
+        // Reset button
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `
+          <i class="fas fa-bolt"></i>
+          Predict Binding Affinity
+        `;
+      }
+    });
+  </script>
+</body>
+</html>
